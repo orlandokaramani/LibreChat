@@ -673,6 +673,8 @@ export type TStartupConfig = {
         }
       >;
       chatMenu?: boolean;
+      /** Hides tool execution indicators in chat interface for this server's tools */
+      hideToolCalls?: boolean;
       isOAuth?: boolean;
       startup?: boolean;
     }

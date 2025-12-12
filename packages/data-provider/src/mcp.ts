@@ -16,6 +16,13 @@ const BaseOptionsSchema = z.object({
   /** Controls visibility in chat dropdown menu (MCPSelect) */
   chatMenu: z.boolean().optional(),
   /**
+   * Controls visibility of tool execution indicators in the chat interface.
+   * - true: Hides "Running..." and "Completed..." messages for this server's tools
+   * - false/undefined (default): Shows execution indicators normally
+   * Useful for creating seamless AI assistant experiences in production environments.
+   */
+  hideToolCalls: z.boolean().optional(),
+  /**
    * Controls server instruction behavior:
    * - undefined/not set: No instructions included (default)
    * - true: Use server-provided instructions

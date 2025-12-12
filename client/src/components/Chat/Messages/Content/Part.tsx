@@ -6,9 +6,10 @@ import {
   imageGenTools,
   isImageVisionTool,
 } from 'librechat-data-provider';
-import { memo } from 'react';
-import type { TMessageContentParts, TAttachment } from 'librechat-data-provider';
+import { memo, useMemo } from 'react';
+import type { TMessageContentParts, TAttachment, Agents } from 'librechat-data-provider';
 import { OpenAIImageGen, EmptyText, Reasoning, ExecuteCode, AgentUpdate, Text } from './Parts';
+import { useGetStartupConfig } from '~/data-provider';
 import { ErrorMessage } from './MessageContent';
 import RetrievalCall from './RetrievalCall';
 import AgentHandoff from './AgentHandoff';
@@ -18,6 +19,35 @@ import WebSearch from './WebSearch';
 import ToolCall from './ToolCall';
 import ImageGen from './ImageGen';
 import Image from './Image';
+
+/**
+ * Checks if tool execution indicators should be hidden for an MCP tool call
+ * @param toolName - The full tool name (e.g., "get_price_mcp_my-server")
+ * @param mcpServers - MCP servers configuration from startup config
+ * @returns true if the tool call should be hidden
+ */
+function shouldHideMCPToolCall(
+  toolName: string | undefined,
+  mcpServers: Record<string, { hideToolCalls?: boolean }> | undefined,
+): boolean {
+  if (!toolName || !mcpServers) {
+    return false;
+  }
+
+  // Check if this is an MCP tool call
+  if (!toolName.includes(Constants.mcp_delimiter)) {
+    return false;
+  }
+
+  // Extract server name from the tool name (format: toolName_mcp_serverName)
+  const [, serverName] = toolName.split(Constants.mcp_delimiter);
+  if (!serverName) {
+    return false;
+  }
+
+  // Check if this server has hideToolCalls enabled
+  return mcpServers[serverName]?.hideToolCalls === true;
+}
 
 type PartProps = {
   part?: TMessageContentParts;
@@ -30,6 +60,33 @@ type PartProps = {
 
 const Part = memo(
   ({ part, isSubmitting, attachments, isLast, showCursor, isCreatedByUser }: PartProps) => {
+    const { data: startupConfig } = useGetStartupConfig();
+
+    // Memoize the tool name extraction for MCP tool call hiding check
+    const toolNameForHiding = useMemo(() => {
+      if (part?.type !== ContentTypes.TOOL_CALL) {
+        return undefined;
+      }
+      const toolCall = part[ContentTypes.TOOL_CALL] as Agents.ToolCall | undefined;
+      if (!toolCall) {
+        return undefined;
+      }
+      // Handle both direct tool calls and function-style tool calls
+      if ('name' in toolCall && toolCall.name) {
+        return toolCall.name;
+      }
+      if ('function' in toolCall && toolCall.function?.name) {
+        return toolCall.function.name;
+      }
+      return undefined;
+    }, [part]);
+
+    // Check if this MCP tool call should be hidden
+    const shouldHideToolCall = useMemo(
+      () => shouldHideMCPToolCall(toolNameForHiding, startupConfig?.mcpServers),
+      [toolNameForHiding, startupConfig?.mcpServers],
+    );
+
     if (!part) {
       return null;
     }
@@ -134,6 +191,10 @@ const Part = memo(
           />
         );
       } else if (isToolCall) {
+        // Hide MCP tool call execution indicators if configured
+        if (shouldHideToolCall) {
+          return null;
+        }
         return (
           <ToolCall
             args={toolCall.args ?? ''}
@@ -183,6 +244,11 @@ const Part = memo(
               </Container>
             );
           }
+          return null;
+        }
+
+        // Hide MCP tool call execution indicators if configured
+        if (shouldHideToolCall) {
           return null;
         }
 
